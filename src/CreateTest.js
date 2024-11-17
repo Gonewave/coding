@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Button, Accordion, Card, ListGroup, Spinner } from 'react-bootstrap';
+import { Form, Button, Accordion, ListGroup, Spinner } from 'react-bootstrap';
 import { db } from './firebaseConfig';
 import { collection, addDoc, getDocs } from 'firebase/firestore';
 

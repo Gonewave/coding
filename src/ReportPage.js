@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc,collection,getDocs,query,where, updateDoc } from "firebase/firestore";
 import { db } from './firebaseConfig';
 import Accordion from "react-bootstrap/Accordion";
-import Card from "react-bootstrap/Card";
 import Button from "react-bootstrap/Button";
 import Table from "react-bootstrap/Table";
 import * as XLSX from 'xlsx';
@@ -41,20 +40,43 @@ const TestReport = () => {
     };
 
     const handleDelete = async (index) => {
-        const confirmLogout = window.confirm("Are you sure you want to delete");
-        if (confirmLogout){
+        const confirmDelete = window.confirm("Are you sure you want to delete?");
+        if (confirmDelete) {
+            const deletedReport = report[index];
             const updatedReport = report.filter((_, idx) => idx !== index);
-        setReport(updatedReport);
-
-        try {
-            const testRef = doc(db, "tests", testId);
-            await updateDoc(testRef, { report: updatedReport });
-        } catch (error) {
-            console.error("Error deleting report entry:", error);
+            setReport(updatedReport);
+    
+            try {
+                // Update the report in the "tests" collection
+                const testRef = doc(db, "tests", testId);
+                await updateDoc(testRef, { report: updatedReport });
+    
+                // Remove the testId from the "tests" array of the corresponding user
+                if (deletedReport && deletedReport.email) {
+                    const userQuery = query(
+                        collection(db, "users"),
+                        where("email", "==", deletedReport.email)
+                    );
+                    const userSnapshot = await getDocs(userQuery);
+    
+                    if (!userSnapshot.empty) {
+                        const userDoc = userSnapshot.docs[0];
+                        const userData = userDoc.data();
+                        const userDocRef = doc(db, "users", userDoc.id);
+    
+                        if (userData.tests && Array.isArray(userData.tests)) {
+                            // Remove the testId from the tests array
+                            const updatedTests = userData.tests.filter((test) => test !== testId);
+                            await updateDoc(userDocRef, { tests: updatedTests });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error deleting report entry or updating user's tests:", error);
+            }
         }
-        }
-        
     };
+    
 
     const handleDownload = () => {
         const tableData = report.map(entry => ({
@@ -125,7 +147,13 @@ const TestReport = () => {
             <br />
             <br />
             <h3>Test Report: {test.testname}</h3>
-            <Table striped bordered hover responsive>
+            {
+                report.length===0?(
+                    <div className="text-center my-4">
+                        <h4>No Data Available</h4>
+                    </div>
+                ) :(
+                    <Table striped bordered hover responsive>
                 <thead>
                     <tr>
                         <th>Email</th>
@@ -205,6 +233,8 @@ const TestReport = () => {
                     })}
                 </tbody>
             </Table>
+                )
+            }
         </div>
         </Container>
         

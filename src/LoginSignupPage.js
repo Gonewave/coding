@@ -10,7 +10,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { Container, Form, Button, Alert, Spinner, Card } from "react-bootstrap";
 
-const adminEmails = ["animichandan@gmail.com", "achandan@gmail.com"];
+const adminEmails = ["animichandan@gmail.com", "anemchandan000@gmail.com","krutibash.n@bvrit.ac.in"];
 
 // Password validation function
 const validatePassword = (password) => {
@@ -89,13 +89,6 @@ function LoginSignupPage() {
   const handleSignIn = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
-
-    // Validate password
-    // if (!validatePassword(password)) {
-    //   setPasswordError("Password must be at least 8 characters long, contain an uppercase letter, a number, and a special character.");
-    //   setAuthLoading(false);
-    //   return;
-    // }
 
     try {
       await signInWithEmail(email, password);

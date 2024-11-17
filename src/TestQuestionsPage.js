@@ -63,7 +63,15 @@ function TestQuestionsPage() {
 
     return (
         <Container className="my-4">
+            <Button variant="secondary" className="mt-4" onClick={() => window.history.back()}>
+                Back to Tests
+            </Button>
+            <br />
+            <br />
+          
             <h2>{test.testname} - Questions</h2>
+         
+            <br />
             <ListGroup>
                 {questions.length === 0 ? (
                     <div>No questions available</div>
@@ -95,9 +103,8 @@ function TestQuestionsPage() {
                     ))
                 )}
             </ListGroup>
-            <Button variant="secondary" className="mt-4" onClick={() => window.history.back()}>
-                Back to Tests
-            </Button>
+            
+            
         </Container>
     );
 }

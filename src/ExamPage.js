@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Accordion, Button, Container,Modal, Row, Col, Spinner, Form, ListGroup } from "react-bootstrap";
+import { Accordion, Button, Container,Modal, Spinner, Form, ListGroup } from "react-bootstrap";
 import { useNavigate, useParams } from "react-router-dom";
 import { db } from './firebaseConfig';
 import { BsCheckCircle, BsXCircle } from "react-icons/bs";
@@ -7,12 +7,11 @@ import { doc, getDoc } from "firebase/firestore";
 import { Editor } from "@monaco-editor/react";
 import { getAuth } from "firebase/auth"; // For getting user's email
 import { updateDoc, arrayUnion } from "firebase/firestore";
-
-
-
 function ExamPage() {
     const { testId } = useParams();
     const [showModal, setShowModal] = useState(false);
+    const [modalPurpose, setModalPurpose] = useState('submit'); // 'submit', 'warning', or 'error'
+    const [modalMessage, setModalMessage] = useState('Are you sure you want to submit test?');
     const [testDetails, setTestDetails] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [language, setLanguage] = useState('python');
@@ -31,16 +30,11 @@ function ExamPage() {
     const [timeEnded, setTimeEnded] = useState(false);
     const auth = getAuth();
     const [isExamSubmitted, setIsExamSubmitted] = useState(false);
-    const [tabSwitchCount, setTabSwitchCount] = useState(1);
-
-
-
+    const [tabSwitchCount, setTabSwitchCount] = useState(0);
     useEffect(() => {
-
         const fetchTestDetailsAndConfig = async () => {
             setIsLoading(true); // Start loading when fetching data
             try {
-                // Fetch test details
                 const testRef = doc(db, "tests", testId); // testId should be defined in your code
                 const testSnapshot = await getDoc(testRef);
                 if (testSnapshot.exists()) {
@@ -65,37 +59,26 @@ function ExamPage() {
                     console.log(filteredQuestions);
                      const initialTime = data.duration * 60; // Assuming duration is in minutes
                      setTimer(initialTime);
-                        
                 } else {
                     console.log("Test not found!");
                 }
-
-                // Fetch config details
                 const response = await fetch('/config.json');
                 const config = await response.json();
                 setApiUrl(config.API_BASE_URL);
-
             } catch (error) {
                 console.error("Error fetching data:", error);
             } finally {
                 setIsLoading(false); // Stop loading after both fetches are done
-                // console.log(testDetails);
             }
         };
-
-
         fetchTestDetailsAndConfig().then(() => {
             console.log(testDetails);
         }); // Call the function when the page loads
-
     }, []);
-
-
     useEffect(() => {
         const interval = setInterval(() => {
             setTimer(prevTime => {
                 if (prevTime > 0) {
-                    // console.log(prevTime);
                     const newTime = prevTime - 1;
                     setDuration(formatTime(newTime));
                     return newTime;
@@ -106,10 +89,8 @@ function ExamPage() {
                 }
             });
         }, 1000);
-
         return () => clearInterval(interval); // Cleanup on unmount
     }, []);
-
     useEffect(() => {
         if (timeEnded) {
             alert("Time Over Exam is being submitted")
@@ -119,17 +100,17 @@ function ExamPage() {
     const handleTabSwitch = () => {
         if (tabSwitchCount < 3) {
             setTabSwitchCount(prevCount => prevCount + 1);
+            setModalPurpose('warning');
+            setModalMessage(`Warning: You have switched tabs ${tabSwitchCount+1} times. Three switches will end your test.`);
+            setShowModal(true);
         } else if (tabSwitchCount === 3 && !isExamSubmitted) {
             setIsExamSubmitted(true); // Mark the exam as submitted
-            // Show the custom alert/modal
-            alert("Exam swtiched tabs too many times, exam is being submitted")
+            alert("Swtiched tabs too many times, exam is being submitted.")
             document.getElementById('submit').click(); // Simulate the submit button click
         }
     };
-
     useEffect(() => {
         window.addEventListener('blur', handleTabSwitch);
-
         return () => {
             window.removeEventListener('blur', handleTabSwitch);
         };
@@ -141,39 +122,27 @@ function ExamPage() {
             window.history.pushState(null, '', window.location.href);
             alert('Back navigation is disabled for the exam.');
         };
-
-
         window.addEventListener('popstate', handlePopState);
         window.history.pushState(null, '', window.location.href);
-
         return () => {
-
             window.removeEventListener('popstate', handlePopState);
         };
     }, []);
-
-
-
     const formatTime = (timeInSeconds) => {
         const hours = String(Math.floor(timeInSeconds / 3600)).padStart(2, '0');
         const minutes = String(Math.floor((timeInSeconds % 3600) / 60)).padStart(2, '0');
         const seconds = String(timeInSeconds % 60).padStart(2, '0');
-        // console.log(`${hours}:${minutes}:${seconds}`)
         return `${hours}:${minutes}:${seconds}`;
     };
-
     const handleRunCode = async (questionId) => {
-
         if (!codeByQuestion[questionId]) {
             alert('Code is required to run.');
             return;
         }
-
         setIsRunning(true);
         const languageId = language === 'python' ? 71 : language === 'java' ? 62 : 76;
         const outputs = [];
         setIsSubmittedByQuestion(prev => ({ ...prev, [questionId]: false }));  // Mark as submitted
-
         try {
             if (useCustomInput) {
                 const customInput = inputByQuestion[questionId] || '';  // Get custom input for the specific question
@@ -187,7 +156,6 @@ function ExamPage() {
             } else {
                 const question = testDetails.questions.find(q => q.questionName === questionId);
                 const filteredTestCases = question.testCases.filter(tc => tc.testCaseName === 'basic1' || tc.testCaseName === 'basic2');
-
                 for (const testCase of filteredTestCases) {
                     const response = await fetch(`${apiUrl}/submissions/?base64_encoded=false&wait=true`, {
                         method: 'POST',
@@ -203,7 +171,6 @@ function ExamPage() {
                     });
                 }
             }
-
             setOutputsByQuestion(prev => ({ ...prev, [questionId]: outputs }));
         } catch (error) {
             console.error('Error executing code:', error);
@@ -217,16 +184,12 @@ function ExamPage() {
             alert('Code is required to submit.');
             return;
         }
-
         setIsSubmitting(true);
         const languageId = language === 'python' ? 71 : language === 'java' ? 62 : 76;
         const testResults = [];
-        let totalScore = 0; // Initialize total score
-
-
+        let totalScore = 0; 
         try {
             const question = testDetails.questions.find(q => q.questionName === questionId);
-
             for (const testCase of question.testCases) {
                 const response = await fetch(`${apiUrl}/submissions/?base64_encoded=false&wait=true`, {
                     method: 'POST',
@@ -235,7 +198,6 @@ function ExamPage() {
                 });
                 const result = await response.json();
                 console.log(result);
-
                 const passed = result.status.description === 'Accepted';
                 if (passed) {
                     totalScore += parseInt(testCase.score, 10); // Add score for passed test cases
@@ -247,9 +209,7 @@ function ExamPage() {
                     passed: result.status.description === 'Accepted',
                     score: testCase.score
                 });
-
             }
-
             setOutputsByQuestion(prev => ({ ...prev, [questionId]: testResults }));
             setIsSubmittedByQuestion(prev => ({ ...prev, [questionId]: true }));  // Mark as submitted
             setTestDetails(prev => ({
@@ -261,21 +221,29 @@ function ExamPage() {
             }));
         } catch (error) {
             console.error('Error executing code:', error);
+            
         } finally {
             setIsSubmitting(false);
         }
     };
     const handleConfirmSubmit = () => {
-        setShowModal(false); // Close the modal
-        handleSubmitTest(); // Proceed with submitting the test
+        if (modalPurpose==="submit"){
+            setShowModal(false); // Close the modal
+            handleSubmitTest(); // Proceed with submitting the test
+        }
+        else{
+            setShowModal(false); // Close the modal
+            setModalPurpose('submit');
+            setModalMessage(`Are you sure you want to submit test?`);
+        }
     };
-
     const handleCancelSubmit = () => {
-        setShowModal(false); // Just close the modal without submitting
+        setShowModal(false);
+        setModalPurpose('submit');
+        setModalMessage(`Are you sure you want to submit test?`);
     };
-
     const handleClickedSubmitTest=()=>{
-        if (tabSwitchCount!=3){
+        if (tabSwitchCount!==3){
             setShowModal(true); // Show custom confirmation modal
         }
         else{
@@ -288,94 +256,96 @@ function ExamPage() {
         const email = auth.currentUser?.email || "unknown"; // Get user's email from Firebase Auth
         const testSubmission = {
             email,
-            questions: [],
+            questions:[],
             duration: formatTime(testDetails.duration * 60 - timer)
         };
         const languageId = language === 'python' ? 71 : language === 'java' ? 62 : 76;
         const results = [];  // State to hold results breakdown for each question
-
-        for (const question of testDetails.questions) {
-            const questionResults = {
-                questionName: question.questionName,
-                testCasesPassed: 0,
-                score: 0,
-                totalTestCases: 0,
-                totalScore: 0
-            };
-
-            const testResults = [];
-
-            for (const testCase of question.testCases) {
-                const response = await fetch(`${apiUrl}/submissions/?base64_encoded=false&wait=true`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ language_id: languageId, source_code: codeByQuestion[question.questionName]?codeByQuestion[question.questionName]:"//", stdin: testCase.input, expected_output: testCase.output, cpu_time_limit: testCase.time }),
-                });
-                const result = await response.json();
-                console.log(result)
-                const passed = result.status.description === 'Accepted';
-                if (passed) {
-                    questionResults.testCasesPassed += 1;
-                    questionResults.score += parseInt(testCase.score, 10); // Add score for passed test cases
+        try {
+            for (const question of testDetails.questions) {
+                const questionResults = {
+                    questionName: question.questionName,
+                    testCasesPassed: 0,
+                    score: 0,
+                    totalTestCases: 0,
+                    totalScore: 0
+                };
+                for (const testCase of question.testCases) {
+                    const response = await fetch(`${apiUrl}/submissions/?base64_encoded=false&wait=true`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ language_id: languageId, source_code: codeByQuestion[question.questionName]?codeByQuestion[question.questionName]:"//", stdin: testCase.input, expected_output: testCase.output, cpu_time_limit: testCase.time }),
+                    });
+                    const result = await response.json();
+                    console.log(result)
+                    const passed = result.status.description === 'Accepted';
+                    if (passed) {
+                        questionResults.testCasesPassed += 1;
+                        questionResults.score += parseInt(testCase.score, 10); // Add score for passed test cases
+                    }
+                    questionResults.totalTestCases += 1
+                    questionResults.totalScore += parseInt(testCase.score, 10);
                 }
-                questionResults.totalTestCases += 1
-                questionResults.totalScore += parseInt(testCase.score, 10);
-                testResults.push({
-                    testCaseName: testCase.testCaseName,
-                    status: result.status.description,
-                    passed,
-                    score: testCase.score
-                });
+                testSubmission.questions.push(questionResults);
+                results.push(questionResults);  // Store the question results to show later
             }
-
-            testSubmission.questions.push(questionResults);
-            results.push(questionResults);  // Store the question results to show later
-
+            console.log(testSubmission);
+        } catch (error) {
+            console.error("Error adding report to test due to execution environment unreachability:\n", error.message);
+            setModalPurpose('error');
+            setModalMessage(`An error occurred: ${error}`);
+            setIsSubmittingTest(false);
+            setShowModal(true);
+            if (tabSwitchCount<3){
+                return;
+            }
+            for (const question of testDetails.questions){
+                const questionResults = {
+                    questionName: question.questionName,
+                    testCasesPassed: 0,
+                    score: 0,
+                    totalTestCases: 0,
+                    totalScore: 0
+                };
+                testSubmission.questions.push(questionResults);
+                results.push(questionResults);
+            }
         }
-
-        console.log(testSubmission); // Output the object to the console
-
         try {
             const testDocRef = doc(db, "tests", testId);
             const testDocSnap = await getDoc(testDocRef);
             if (testDocSnap.exists()) {
-                // Get the current report array from Firestore
                 const testData = testDocSnap.data();
-                const report = testData.report || []; // Ensure there's a report array
-
-                // Check if the email already exists in the report
+                const report = testData.report || [];
                 const existingReportIndex = report.findIndex(entry => entry.email === email);
-
                 if (existingReportIndex !== -1) {
-                    // Email already exists in the report, update the corresponding entry
-                    const updatedReport = [...report]; // Make a copy of the array
+                    const updatedReport = [...report];
                     updatedReport[existingReportIndex] = { ...updatedReport[existingReportIndex], ...testSubmission };
-
-                    // Update the Firestore document with the modified report array
                     await updateDoc(testDocRef, {
                         report: updatedReport
                     });
-                    console.log("Test report updated successfully!");
                     alert("Test submitted successfully.");
                 } else {
-                    // Email doesn't exist, push the new testSubmission into the report array
                     await updateDoc(testDocRef, {
                         report: arrayUnion(testSubmission) // Add the new report to the array
                     });
-                    console.log("Test report added successfully!");
                     alert("Test submitted successfully.");
                 }
             } else {
                 console.log("No such test document!");
             }
+            navigate("/results", { state: { results } }); // Pass the results via navigation state
         } catch (error) {
-            console.error("Error adding report to test:", error);
+            console.error("Error adding report to test:", error.message);
+            setModalPurpose('error');
+            setModalMessage(`An error occurred: ${error}`);
+            setShowModal(true);
+            setIsSubmittingTest(false);
         }
-        setIsSubmittingTest(false);
-        navigate("/results", { state: { results } }); // Pass the results via navigation state
-
+        finally{
+            setIsSubmittingTest(false);
+        }
     };
-
     const handleInputChange = (value, questionId) => {
         setInputByQuestion(prevInput => ({
             ...prevInput,
@@ -385,15 +355,13 @@ function ExamPage() {
     const renderOutput = (questionId) => {
         const questionOutputs = outputsByQuestion[questionId] || [];
         const isSubmitted = isSubmittedByQuestion[questionId];  // Check if the code has been submitted
-
         return (
             <div className="d-flex flex-wrap justify-content-around mt-3">
                 {questionOutputs.map((result, idx) => (
                     <div
                         key={idx}
                         className="card p-3 mb-3"
-                        style={{ width: '45%', minWidth: '200px', boxShadow: "0px 0px 10px rgba(0, 0, 0, 0.1)" }}
-                    >
+                        style={{ width: '45%', minWidth: '200px', boxShadow: "0px 0px 10px rgba(0, 0, 0, 0.1)" }}>
                         <div className="d-flex justify-content-between align-items-center">
                             <h6 className="mb-0">{result.testCaseName}</h6>
                             {isSubmitted ? (  // Only show tick/cross and hide output if submitted
@@ -408,7 +376,6 @@ function ExamPage() {
                                 ) : null
                             )}
                         </div>
-
                         {!isSubmitted && (
                             <>
                                 <hr />
@@ -420,7 +387,6 @@ function ExamPage() {
                                 </div>
                             </>
                         )}
-
                     </div>
                 ))}
                 {isSubmitted && (
@@ -431,30 +397,23 @@ function ExamPage() {
             </div>
         );
     };
-
-
     const handleCodeChange = (value, questionId) => {
         setCodeByQuestion(prevCodeByQuestion => ({
             ...prevCodeByQuestion,
             [questionId]: value,
         }));
     };
-
-
     const renderAccordionItem = (question, idx) => {
         const filteredTestCases = question.testCases.filter(tc => tc.testCaseName === 'basic1' || tc.testCaseName === 'basic2');
-
         return (
             <Accordion.Item eventKey={String(idx)}>
                 <Accordion.Header>{question.questionName}</Accordion.Header>
                 <Accordion.Body>
-
                     <div className="mb-3">
                          <strong>Description:</strong><br/>{question.questionDescription.split("\n").map((line, i) => (
                             <div key={i}>{line}</div>
                         ))}
                     </div>
-
                     <div className="mb-3">
                         <strong>Test Cases:</strong><br />
                         <ListGroup>
@@ -463,15 +422,10 @@ function ExamPage() {
                                     <strong>{tc.testCaseName}:</strong><br />
                                     <div>Input:<br /> {tc.input}</div>
                                     <div>Output:<br /> {tc.output}</div>
-                                </ListGroup.Item>
-                                
+                                </ListGroup.Item>      
                             ))}
                         </ListGroup>
-                        <div>
-                            
-                        </div>
                     </div>
-
                     <Form.Group className="mb-3">
                         <Form.Label>Select Language:</Form.Label>
                         <Form.Select value={language} onChange={(e) => setLanguage(e.target.value)}>
@@ -480,7 +434,6 @@ function ExamPage() {
                             <option value="cpp">C++</option>
                         </Form.Select>
                     </Form.Group>
-
                     <Form.Group className="mb-3">
                         <Form.Check
                             type="checkbox"
@@ -489,7 +442,6 @@ function ExamPage() {
                             onChange={() => setUseCustomInput(!useCustomInput)}
                         />
                     </Form.Group>
-
                     {useCustomInput && (
                         <Form.Group className="mb-3">
                             <Form.Label>Input</Form.Label>
@@ -502,7 +454,6 @@ function ExamPage() {
                             />
                         </Form.Group>
                     )}
-
                     <Form.Group className="mb-3">
                         <Form.Label>Code</Form.Label>
                         <Editor
@@ -513,7 +464,6 @@ function ExamPage() {
                             onChange={(value) => handleCodeChange(value, question.questionName)}
                         />
                     </Form.Group>
-
                     <Button variant="primary" onClick={() => handleRunCode(question.questionName)} disabled={isRunning}>
                         {isRunning ? "Running..." : "Run Code"}
                     </Button>
@@ -523,7 +473,6 @@ function ExamPage() {
                         onClick={() => handleSubmitCode(question.questionName)}>
                         {isSubmitting ? <Spinner animation="border" size="sm" /> : "Submit Code"}
                     </Button>
-
                     <div className="mt-3">
                         {renderOutput(question.questionName)}
                     </div>
@@ -531,32 +480,40 @@ function ExamPage() {
             </Accordion.Item>
         );
     };
+    if (isSubmittingTest) {
+        return (
+            <Container className="d-flex justify-content-center align-items-center" style={{ minHeight: "100vh" }}>
+                <Spinner animation="border" size="1000px" />
+            </Container>
+        );  
+    }
 
     return (
         <Container className="my-4">
             <Modal show={showModal} onHide={handleCancelSubmit}>
                 <Modal.Header closeButton>
-                    <Modal.Title>Confirm Submission</Modal.Title>
+                <Modal.Title>
+                        {modalPurpose === 'submit' && 'Confirm Submission'}
+                        {modalPurpose === 'warning' && 'Warning'}
+                        {modalPurpose === 'error' && 'Error'}
+                    </Modal.Title>
                 </Modal.Header>
-                <Modal.Body>Are you sure you want to submit the test?</Modal.Body>
+                <Modal.Body><h4>{modalMessage}</h4></Modal.Body>
                 <Modal.Footer>
                     <Button variant="secondary" onClick={handleCancelSubmit}>
-                        Cancel
+                        {modalPurpose === 'submit' ? 'Cancel' : 'Close'}
                     </Button>
                     <Button variant="primary" onClick={handleConfirmSubmit}>
-                        Confirm
+                        {modalPurpose === 'submit' ? 'Confirm' : 'OK'}
                     </Button>
                 </Modal.Footer>
             </Modal>
             <div className="row justify-content-between" >
-
                 <div className="col-2">
                     <p><strong>Time Remaining</strong>: {duration}</p>
                 </div>
             </div>
-
             <h3>Test: {testDetails?.testname}</h3>
-
             {isLoading ? (
                 <div className="text-center">
                     <Spinner animation="border" />
@@ -577,7 +534,6 @@ function ExamPage() {
                             {isSubmittingTest ? 'Submitting...' : 'Submit Test'}
                         </Button>
                     </>
-
                 ) : (
                     <div>No questions available</div>
                 )
@@ -585,5 +541,4 @@ function ExamPage() {
         </Container>
     );
 }
-
 export default ExamPage;

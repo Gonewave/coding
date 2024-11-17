@@ -13,7 +13,7 @@ function Admin() {
     const [isStarting, setIsStarting] = useState(false);
     const [isEnding, setIsEnding] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [isReconducting, setIsReconducting] = useState(false); // Loading state for ReConduct action
+    const [isReconducting, setIsReconducting] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -41,7 +41,7 @@ function Admin() {
         };
 
         fetchTests();
-    }, []);
+    }, [isDeleting,isEnding,isReconducting,isStarting]);
 
     const startTest = async (testId) => {
         const confirmStart = window.confirm("Are you sure you want to start this test?");
@@ -50,7 +50,6 @@ function Admin() {
             try {
                 const testRef = doc(db, "tests", testId);
                 await updateDoc(testRef, { started: true, conductedon: new Date() });
-                window.location.reload();
             } catch (error) {
                 console.error("Error starting test:", error);
             } finally {
@@ -66,7 +65,6 @@ function Admin() {
             try {
                 const testRef = doc(db, "tests", testId);
                 await updateDoc(testRef, { ended: true, conductedon: new Date() });
-                window.location.reload();
             } catch (error) {
                 console.error("Error ending test:", error);
             } finally {
@@ -82,7 +80,22 @@ function Admin() {
             try {
                 const testRef = doc(db, "tests", testId);
                 await deleteDoc(testRef);
-                window.location.reload();
+                    const usersRef = collection(db, "users");
+                const usersSnapshot = await getDocs(usersRef);
+                    const updatePromises = usersSnapshot.docs.map(async (userDoc) => {
+                    const userData = userDoc.data();
+                    const userDocRef = doc(db, "users", userDoc.id);
+                    if (userData.tests && Array.isArray(userData.tests)) {
+                        if (userData.tests.includes(testId)) {
+                            const updatedTests = userData.tests.filter((test) => test !== testId);
+                            await updateDoc(userDocRef, {
+                                tests: updatedTests,
+                            });
+                        }
+                    }
+                });
+                    await Promise.all(updatePromises);
+                console.log(`Test ${testId} successfully deleted from tests collection and users' documents.`);
             } catch (error) {
                 console.error("Error deleting test:", error);
             } finally {
@@ -91,6 +104,7 @@ function Admin() {
         }
     };
     
+    
     const reConductTest = async (testId) => {
         const confirmReconduct = window.confirm("Are you sure you want to reconduct this test?");
         if (confirmReconduct) {
@@ -98,7 +112,6 @@ function Admin() {
             try {
                 const testRef = doc(db, "tests", testId);
                 await updateDoc(testRef, { ended: false });
-                window.location.reload();
             } catch (error) {
                 console.error("Error reconducting test:", error);
             } finally {
@@ -156,7 +169,9 @@ function Admin() {
     };
 
     const renderTable = (data, columns, showConductedOn = false, showReportButton = false, actions = null, showDeleteButton = false, showReConductButton = false) => (
-        <Table striped bordered hover responsive className="mt-4">
+        <>{data.length===0?(<div className="text-center my-4">
+            <h4>No Tests Available</h4>
+        </div>):(<Table striped bordered hover responsive className="mt-4">
             <thead>
                 <tr>
                     {columns.map((col, idx) => <th key={idx}>{col}</th>)}
@@ -165,7 +180,7 @@ function Admin() {
             <tbody>
                 {data.map((test) => renderTableRow(test, showConductedOn, showReportButton, actions, showDeleteButton, showReConductButton))}
             </tbody>
-        </Table>
+        </Table>)}</>
     );
 
     const handleLogout = async () => {
@@ -173,7 +188,7 @@ function Admin() {
         if (confirmLogout) {
             try {
                 await signOut(auth);
-                navigate("/"); // Redirect to login/signup page after logout
+                navigate("/"); 
             } catch (error) {
                 console.error("Error signing out:", error);
             }
@@ -188,6 +203,7 @@ function Admin() {
                     <Button variant="primary" onClick={() => navigate("/createTest")}>Create Test</Button>
                     <Button variant="primary" onClick={() => navigate("/editor")} className="ms-2">Editor</Button>
                     <Button variant="primary" onClick={() => navigate("/manageQuestions")} className="ms-2">Questions</Button>
+                    <Button variant="primary" onClick={() => navigate("/stats")} className="ms-2">Stats</Button>
 
                 </Col>
                 <Col className="text-end">

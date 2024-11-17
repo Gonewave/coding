@@ -12,7 +12,9 @@ import ReportPage from './ReportPage'; // Import the ReportPage component
 import Results from "./Results";
 import CreateQuestion from "./CreateQuestion";
 import ManageQuestions from "./ManageQuestions";
-
+import Stats from "./Stats";
+import DetailedReport from "./DetailedReport";
+import ErrorBoundary from "./ErrorBoundary";
 const adminEmails = ["animichandan@gmail.com", "achandan@gmail.com"];
 
 function App() {
@@ -37,7 +39,8 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<LoginSignupPage />} />
+
+          <Route path="/" element={<ErrorBoundary><LoginSignupPage /> </ErrorBoundary> } />
           
           {/* Protect all routes below */}
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
@@ -50,6 +53,8 @@ function App() {
           <Route path="/results" element={<ProtectedRoute><Results /></ProtectedRoute>} />
           <Route path="/createQuestions" element={<ProtectedRoute><CreateQuestion /></ProtectedRoute>} />
           <Route path="/manageQuestions" element={<ProtectedRoute><ManageQuestions /></ProtectedRoute>} />
+          <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
+          <Route path="/detailedReport/:userId" element={<ProtectedRoute><DetailedReport /></ProtectedRoute>} />
 
           {/* Redirect after login */}
           <Route path="/home" element={<RedirectToRole />} />
